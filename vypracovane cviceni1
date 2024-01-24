@@ -1,0 +1,162 @@
+DEFINE
+	MEASURE data[cv01 minimalni datum] = 
+	/*
+	 Respektujeme filtry vizuálu, žádné nepřidáváme či nerušíme, tj. základní agregační funkce MIN()
+	*/
+	MIN(data[datum])
+	-----------------------------------------
+	MEASURE	data[cv02 minimalni datum vse] = 
+	/*
+	Potřebujeme se zbavit všech filtrů nad tabulkou data, k čemuž využijeme funkci ALL(), která vrací kopii tabulky zbavenou všech filtrů
+	Následně tuto kopii tabulky data potřebujeme agregovat za pomoci funkce končící na "X", v našem případě MINX()
+	*/
+	
+	MINX(
+		--krok1: Vytváříme kopii tabulky data zbavenou všech filtrů
+		ALL(data),
+	--krok2: Hledáme mininimum ve sloupci [datum] kopie tabulky data vrácenou funkcí ALL()	
+	data[datum])
+	-----------------------------------------
+	MEASURE data[cv03 minimalni datum ruzyne] = 
+	/*
+	Akceptujeme filtry vizuálu, přidáváme filtr nad sloupec [lokalita], tj. budeme potřebovat funkci FILTER(), která vytváří kopii tabulky se všemi jejími filtry
+	a dále nastavuje filtry nové. Tabulku vrácenou funkcí FILTER() budeme agregovat za pomoci MINX()
+	*/
+	MINX(
+		--krok1: Kopie tabulky data, kdy respektujeme filtry vizuálu a přidáváme další filtr nad sloupec [lokalita]
+		-- funkce FILTER() vrací tabulku
+		FILTER(data,data[lokalita] = "RUZYNE"),
+	--krok2: Hledáme minimum ve sloupci [datum] kopie tabulky data vrácenou funkcí FILTER()
+	data[datum])
+	-----------------------------------------
+	
+	MEASURE data[cv04 minimalni datum rok] =
+	/*
+	Potřebujeme se zbavit filtru nad sloupcem [mesic], a to použitím funkce ALL(), která nás ale zbaví i filtru nad sloupcem [rok],
+	z tohoto důvodu budeme potřebovat:
+		- funkci ALL() pro zbavení se filtrů
+		- funkci FILTER() pro nastavení filtru nad sloupec [rok]
+		- funkci pro výpočet hodnoty, na kterou filtrujeme sloupec [rok], v úvahu přichází: MIN(), MAX(), SELECTEDVALUE()
+		- - MINX() pro agregaci sloupce [datum] tabulky vrácené funkcí FILTER()
+	*/	
+	MINX(
+		FILTER(
+			--krok1: Vytváříme kopii tabulky data zbavenou všech filtrů
+			ALL(data)
+		--krok2: Nastavujeme filtr nad tabulku vrácenou funkcí ALL(), konkrétně její sloupec [rok]
+		,data[rok] 
+					--krok3: Počítáme hodnotu, na kteoru filtrujeme funkcí FILTER(). Pro výpočet hodnoty používáme
+					-- základní agregační funkcí, tj. dotazujeme se na originální (vizuálem filtrovanou) tabulku
+					= MIN(data[rok])
+		)
+		--krok4: Počítáme minimální hodnotu ze sloupce [datum] tabulky vrácené funkcí FILTER()
+		,data[datum])
+		
+	-----------------------------------------
+	MEASURE data[cv05 minimalni datum predchozi rok] =
+	/*
+	Potřebujeme změnit filtr nad sloupcem [rok] což znamená:
+		-- zrušit stávající filtr
+		-- nastavit nový filtr
+	Potřebovat budeme funkce:
+		- ALL() pro vytvoření kopie tabulky data zbavené všech filtrů
+		- FILTER() pro nastavení filtru nad sloupec [rok] a [mesic]
+		- funkce pro výpočet roku a měsíce, na které filtrujeme, v úvahu přichází např. MAX(), MIN(), SELECTEDVALUE()
+		- MINX() pro agregaci sloupce [datum] tabulky vrácené funkcí FILTER()
+	*/
+	MINX(
+		FILTER(
+			--krok1: Vytváříme kopii tabulky data zbavenou všech filtrů
+			ALL(data),
+			--krok2: Znovu nastavujeme filtry nad sloupce [mesic] a [rok]
+				-- nastaveni filtru na hodnotu [mesic] originální tabulky data filtrované vizuálem
+			data[mesic] = SELECTEDVALUE(data[mesic])
+			-- nastaveni filtru na hodnotu [rok] originální tabulky data filtrované vizuálem,
+			-- od této hodnoty následně odečítáme 1
+			&& data[rok] = SELECTEDVALUE(data[rok]) - 1
+		)
+		--krok3: Výpočet minimální hodnotu ze sloupce [datum] tabulky vrácené funkcí FILTER()
+	,data[datum])
+	
+	-----------------------------------------
+	MEASURE data[cv06 suma srazek] =
+	/*
+	Počítáme sumu sloupce [srazky] pro daný rok a měsíc (tj. období vybrané vizuálem), tj. respektujeme filtry vizuálu,
+	žádné nepřidáváme, použijeme tedy základní agregační funkci.
+	*/
+	SUM(data[srazky])
+	-----------------------------------------
+	MEASURE data[cv07 suma srazek predchozi rok] =
+	/*
+	Potřebujeme upravit filtr nad sloupcem [rok], což v našem případě znamená:
+	- zrušit stávající filtr za pomoci funkce ALL()
+	- nastavit znovu filtr nad sloupci [rok] a [mesic]
+	Potřebovat budeme funkce:
+	- ALL() pro vytvoření kopie tabulky data zbavené všech filtrů, tj. filtry nad sloupci [rok] i [mesic]
+	- FILTER() pro opětovné nastavení filtrů nad sloupci [rok] i [mesic]
+	- funkci pro výpočet hodnot, nakteré filtrujeme, v potaz přichází MIN(), MAX(), SELECTEDVALUE()
+	- SUMX() pro agregaci dat ze sloupce [srazky]
+	*/
+	SUMX(
+		FILTER(
+			--krok1: Vytvoříme kopii tabulky data zbavenou všech filtrů
+			ALL(data),
+		-- krok2: Nastavíme filtry na sloupce tabulky vrácené funkcí ALL()
+			-- výpočet hodnoty sloupce [mesic] originální tabulky data filtrované vizuálem
+			data[mesic] = SELECTEDVALUE(data[mesic])
+			-- výpočet hodnoty sloupce [rok] originální tabulky dta filtrované vizuálem,
+			-- od této hodnoty odečítáme 1.
+			&& data[rok] = SELECTEDVALUE(data[rok]) - 1
+		),
+	--krok3: Součet hodnot ze sloupce [srazky] tabulky vrácené funkcí FILTER()
+	data[srazky])
+	
+	-----------------------------------------
+	MEASURE data[cv08 suma srazek kumulativne] =
+	/*
+	Potřebujeme upravit filtr nad sloupcem [mesic], což v našem případně znamená:
+	- zrušit stávající filtr
+	- nastavit nový filtr
+	
+	Potřebovat budeme funkce:
+	- ALL() pro vytvoření kopie tabulky data zbavené všech filtrů
+	- FILTER() pro opětovné nastavení filtrů na sloupce [rok] a [mesic]
+	- funkci pro výpočet hodnot, nakteré filtrujeme, v potaz přichází MIN(), MAX(), SELECTEDVALUE()
+	- SUMX() pro agregaci dat ze sloupce [srazky]
+	*/
+	
+	SUMX(
+		FILTER(
+			--krok1: Vytváříme kopii tabulky data zbavenou všech filtrů
+			ALL(data),
+		--krok2: Nastavujeme filtry nad sloupce [mesic] a [rok] tabulky vrácené funkcí ALL()
+			-- výpočet hodnoty ze sloupce [mesic] původní tabulky data filtrované vizuálem
+		data[mesic] <= SELECTEDVALUE(data[mesic])
+			-- výpočet hodnoty ze sloupce [rok] původní tabulky data filtrované vizuálem
+		&& data[rok] = SELECTEDVALUE(data[rok])
+		),
+	-- krok3: Součet hodnot ze sloupce [srazky] tabulky vrácené funkcí FILTER()
+	data[srazky])
+	
+	-----------------------------------------
+	
+	MEASURE data[cv09 pocet tropickych dnu ruzyne] =
+	/*
+	Respektujeme filtry vizuálu nad sloupci [rok] a [mesic], potřebujeme přidat filtr nad sloupec [lokalita] a [maximalni_teplota]
+	potřebovat budeme funkce:
+	- FILTER() pro vytvoření kopie tabulky data se zachováním všech filtrů a následné nastavení filtru na sloupec [lokalita] a [maximalni_teplota]
+	- COUNTX() pro agregaci sloupce [datum]
+	*/
+	
+	COUNTX(
+		--krok1: Vytvoříme kopii tabulky data, kdy si zachováváme filtry vizuálu
+		FILTER(data,
+			-- nastavujeme filtr na sloupec [lokalita]
+			data[lokalita] = "RUZYNE"
+			-- nastavavujeme filtr na sloupec [maximalni_teplota]
+			&& data[maximalni_teplota] > 30
+		)
+	-- krok2: Počítáme hodnoty ve sloupci [datum] tabulky vrácené funkcí FILTER()
+	,data[datum])
+	
+	
